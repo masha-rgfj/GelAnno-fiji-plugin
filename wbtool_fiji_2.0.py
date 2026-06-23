@@ -8,7 +8,7 @@
 # If you use WBTool in published research, please cite:
 # Maria A. Pirozhkova (Masha) (RGFJ).
 # *WBTool: A GUI tool for annotating and assembling Western blot figures* (2026).
-# GitHub: https://github.com/masha-rgfj/western-blot-tool-package
+# GitHub: https://github.com/masha-rgfj/wbtool-fiji-plugin
 
 from ij import IJ, ImagePlus, Prefs
 from ij.gui import GenericDialog, Overlay, Line, TextRoi
