@@ -762,6 +762,7 @@ class WBTool(ActionListener):
         self.gel_imp              = None
         self.workflow_mode        = "single"
         self.kda_markers          = []
+        self.kda_marker_lanes     = []
         self.kda_mode_active      = False
         self._waiting_for_crop    = False
         self._crop_was_marking    = False
@@ -1072,7 +1073,7 @@ class WBTool(ActionListener):
         self.gel_imp     = imp
         self.kda_markers = []
         show_image_right_half(imp)
-        IJ.setTool("rectangle")
+        set_crop_selection_tool()
         self._set_status("Single image mode -- mark kDa bands or crop directly")
     def open_marker_image(self):
         imp, self._last_dir = open_rgb_image(self.frame, self._last_dir)
@@ -1087,7 +1088,7 @@ class WBTool(ActionListener):
         self._activate_kda_mode()
         self._set_status("Paired mode -- mark the marker image, then apply markers to blot")
     def apply_markers_to_blot(self):
-        if self.workflow_mode != "paired_marker":
+        if self.workflow_mode not in ("paired_marker","paired_blot"):
             JOptionPane.showMessageDialog(self.frame,
                 "Start with Separate Marker/Blot, then mark the ladder bands.",
                 "Not in paired mode", JOptionPane.WARNING_MESSAGE)
@@ -1099,11 +1100,13 @@ class WBTool(ActionListener):
             return
         marker_w = self.gel_imp.getWidth() if self.gel_imp is not None else None
         marker_h = self.gel_imp.getHeight() if self.gel_imp is not None else None
+        self._remember_kda_lane()
+        was_marking = self.kda_mode_active
         if self.kda_mode_active:
             self._deactivate_kda_mode()
         imp, self._last_dir = open_rgb_image(self.frame, self._last_dir)
         if imp is None:
-            self._activate_kda_mode()
+            if was_marking: self._activate_kda_mode()
             return
         if marker_w is not None and (imp.getWidth() != marker_w or imp.getHeight() != marker_h):
             JOptionPane.showMessageDialog(self.frame,
@@ -1164,7 +1167,7 @@ class WBTool(ActionListener):
         self._gel_mouse_listener           = None
         self._saved_mouse_listeners        = []
         self._saved_mouse_motion_listeners = []
-        IJ.setTool("rectangle")
+        set_crop_selection_tool()
     def _on_gel_click(self, scene_x, scene_y):
         val = ask_string("kDa value", "Enter kDa label for this band:", "0")
         if val is None:
@@ -1204,19 +1207,49 @@ class WBTool(ActionListener):
             self._set_status("kDa marking active -- click gel")
     def _fc(self,v):
         return "NA" if v is None else ("%.2f"%v if isinstance(v,float) else str(v))
+    def _same_lane(self,a,b):
+        if len(a)!=len(b): return False
+        for x,y in zip(a,b):
+            if x.get("kda")!=y.get("kda"): return False
+            if self._fc(x.get("x_abs",None))!=self._fc(y.get("x_abs",None)): return False
+            if self._fc(x.get("y_abs",x.get("y_orig",None)))!=self._fc(y.get("y_abs",y.get("y_orig",None))): return False
+        return True
+    def _remember_kda_lane(self):
+        if not self.kda_markers: return
+        lane=[dict(m) for m in self.kda_markers]
+        if not self.kda_marker_lanes or not self._same_lane(self.kda_marker_lanes[-1],lane):
+            self.kda_marker_lanes.append(lane)
     def coordinate_log_text(self):
         a=["WBTool Coordinate Log",""]
         if self.gel_imp is not None:
             a+=["Source image: "+self.gel_imp.getTitle(),"Source size: width=%d, height=%d"%(self.gel_imp.getWidth(),self.gel_imp.getHeight()),""]
         a.append("Global kDa markers (absolute source-image coordinates):")
-        if self.kda_markers:
-            for i,m in enumerate(self.kda_markers):
-                a.append("  %d. label=%s, x_abs=%s, y_abs=%s"%(i+1,kda_label_text(m["kda"]),self._fc(m.get("x_abs",None)),self._fc(m.get("y_abs",m.get("y_orig",None)))))
+        lanes=[list(l) for l in self.kda_marker_lanes]
+        if self.kda_markers and (not lanes or not self._same_lane(lanes[-1],self.kda_markers)):
+            lanes.append(self.kda_markers)
+        if lanes:
+            for li,lane in enumerate(lanes):
+                a.append("  Lane %d:"%(li+1))
+                for i,m in enumerate(lane):
+                    a.append("    %d. label=%s, x_abs=%s, y_abs=%s"%(i+1,kda_label_text(m["kda"]),self._fc(m.get("x_abs",None)),self._fc(m.get("y_abs",m.get("y_orig",None)))))
         else: a.append("  none")
         a+=["","Crops in figure:"]
         if self.bands:
             for i,b in enumerate(self.bands):
-                a.append("  Band %d: %s"%(i+1,plain_text(b.protein_name)))
+                ml="none"
+                if b.kda_markers:
+                    for li,lane in enumerate(lanes):
+                        ok=True
+                        for bm in b.kda_markers:
+                            hit=False
+                            for m in lane:
+                                if bm.get("kda")==m.get("kda") and self._fc(bm.get("x_abs",None))==self._fc(m.get("x_abs",None)) and self._fc(bm.get("y_abs",None))==self._fc(m.get("y_abs",m.get("y_orig",None))):
+                                    hit=True; break
+                            if not hit:
+                                ok=False; break
+                        if ok:
+                            ml=str(li+1); break
+                a.append("  Band %d: marker lane %s, %s"%(i+1,ml,plain_text(b.protein_name)))
                 a.append("    crop_abs: x=%s, y=%s, width=%s, height=%s, angle=%s"%(self._fc(getattr(b,"crop_x",None)),self._fc(getattr(b,"crop_y",None)),self._fc(getattr(b,"crop_w",None)),self._fc(getattr(b,"crop_h",None)),self._fc(getattr(b,"crop_angle",0.0))))
                 if b.kda_markers:
                     for m in b.kda_markers:
@@ -1261,6 +1294,7 @@ class WBTool(ActionListener):
             if self._crop_was_marking: self._activate_kda_mode()
             return
         cropped, x, y, w, h, angle = crop_data
+        self._remember_kda_lane()
         local_m = []
         for m in self.kda_markers:
             yy = marker_y_in_crop(m, x, y, angle)
