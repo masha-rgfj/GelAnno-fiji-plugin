@@ -1,7 +1,15 @@
 # wbtool-fiji-plugin
-Fiji plugin for making blot figures
+Fiji plugin for making publication-ready Western blot and other gel figures.
 
-Download the ".py" file, put it in Fiji's "plugins" folder and enjoy
+There are 2 ways to install.
+
+1. Adding from Fiji update site:
+
+Help -> Update... -> Manage update sites -> Add Unlisted Site. Fill in "GelAnno" in the name column and "https://sites.imagej.net/GelAnno/" in the URL column (instructions from https://imagej.net/update-sites/following)
+
+2. Adding from GitHub:
+
+Download the ".py" file, put it in Fiji's "plugins" folder and enjoy! If you are using ImageJ and not Fiji, install itextpdf module.
 
 
 
