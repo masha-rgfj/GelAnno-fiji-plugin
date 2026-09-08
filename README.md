@@ -1,5 +1,7 @@
 # Gelato
 
+[![DOI](https://zenodo.org/badge/1271120878.svg)](https://doi.org/10.5281/zenodo.22644100)
+
 Gelato (former GelAnno or wbtools) is a Fiji/ImageJ plugin for traceable gel-figure assembly and paired kDa values mapping
 Supported input: tif/tiff, png, jpg/jpeg
 
@@ -145,9 +147,10 @@ New coordinate logs use the `GelAnno Coordinate Log` header. GelAnno also accept
 
 # Citation
 
-If you use Gelato to prepare figures for a publication, please cite the version of the tool that you used.
+If you use Gelato to prepare figures for a publication, please cite using DOI above.
 
 Maria A. Pirozhkova, Elisheva Babitz. Gelato: an ImageJ/Fiji plugin for traceable gel figures assembly and annotation. GitHub repository: https://github.com/masha-rgfj/Gelato-fiji-plugin 2026
+
 
 
 ## Contributions
