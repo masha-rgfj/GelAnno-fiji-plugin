@@ -110,7 +110,7 @@ import org.scijava.plugin.Plugin;
 
 @Plugin(
         type = Command.class,
-        menuPath = "Plugins>Gelato>Gelato 1.0.0")
+        menuPath = "Plugins>Gelato>Gelato 1.0.1")
 public class Gelato implements Command {
     @Override
     public void run() {
@@ -133,7 +133,7 @@ public class Gelato implements Command {
         private static final float A4_PAGE_HEIGHT_PT = 841.8898f;
         private static final int TOOL_BUTTON_W = 220;
         private static final int TOOL_BUTTON_H = 30;
-        private static final String VERSION = "1.0.0";
+        private static final String VERSION = "1.0.1";
         private static final int LOG_FORMAT_VERSION = 1;
         private static final double CROP_GEOMETRY_AGREEMENT_TOLERANCE = 1.0;
         private static final double MARKER_COORDINATE_AGREEMENT_TOLERANCE = 1.0;
@@ -152,7 +152,8 @@ public class Gelato implements Command {
         private static final double SOURCE_MARKER_R = 10.0;
         private static final float RECONSTRUCTION_CONNECTOR_STROKE_WIDTH = 2.0f;
         private static final Font FONT_KDA = new Font("Arial", Font.PLAIN, 11);
-        private static final Font FONT_SOURCE_KDA = new Font("Arial", Font.BOLD, 55);
+        private static final double SOURCE_OVERLAY_REFERENCE_WIDTH = 2000.0;
+        private static final Font FONT_SOURCE_KDA = new Font("Arial", Font.BOLD, 36);
         private static final Font FONT_RECONSTRUCTION_CROP = new Font("Arial", Font.BOLD, 28);
         private static final Font FONT_RECONSTRUCTION_MARKER = new Font("Arial", Font.BOLD, 36);
         private static final Font FONT_NAME = new Font("Arial", Font.BOLD, 12);
@@ -1552,22 +1553,26 @@ public class Gelato implements Command {
                 clearOverlay(image);
                 return;
             }
+            double overlayScale = sourceOverlayScale(image.getWidth());
+            double markerRadius = SOURCE_MARKER_R * overlayScale;
+            Font markerFont = sourceOverlayFont(FONT_SOURCE_KDA, overlayScale);
             Overlay overlay = new Overlay();
             for (KdaMarker marker : markerSet.markers) {
                 double x = marker.xAbs * scaleX;
                 double y = marker.yAbs * scaleY;
-                Line diagA = new Line(x - SOURCE_MARKER_R, y - SOURCE_MARKER_R,
-                        x + SOURCE_MARKER_R, y + SOURCE_MARKER_R);
+                Line diagA = new Line(x - markerRadius, y - markerRadius,
+                        x + markerRadius, y + markerRadius);
                 diagA.setStrokeColor(Color.RED);
-                diagA.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH);
+                diagA.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH * overlayScale);
                 overlay.add(diagA);
-                Line diagB = new Line(x - SOURCE_MARKER_R, y + SOURCE_MARKER_R,
-                        x + SOURCE_MARKER_R, y - SOURCE_MARKER_R);
+                Line diagB = new Line(x - markerRadius, y + markerRadius,
+                        x + markerRadius, y - markerRadius);
                 diagB.setStrokeColor(Color.RED);
-                diagB.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH);
+                diagB.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH * overlayScale);
                 overlay.add(diagB);
                 if (showSourceKdaLabels) {
-                    TextRoi label = new TextRoi(x + 14.0, y - 52.0, marker.label, FONT_SOURCE_KDA);
+                    TextRoi label = new TextRoi(x + 14.0 * overlayScale,
+                            y - 36.0 * overlayScale, marker.label, markerFont);
                     label.setStrokeColor(Color.RED);
                     label.setFillColor(new Color(255, 255, 255, 170));
                     overlay.add(label);
@@ -1579,8 +1584,7 @@ public class Gelato implements Command {
 
         private void redrawAnnotatedMarkerImages() {
             for (AnnotatedMarkerImage annotated : annotatedMarkerImages) {
-                drawKdaOverlay(annotated.imagePlus, annotated.markerSet,
-                        annotated.scaleX, annotated.scaleY);
+                drawAnnotatedMarkerOverlay(annotated);
             }
         }
 
@@ -3096,7 +3100,7 @@ public class Gelato implements Command {
                 }
                 KdaMarkerSet markerSet = reconstructedSets.get(loggedSet.id);
                 reconstructed.openAnnotatedMarkerImage(
-                        markerSet, request.loadedImage, annotatedIndex++);
+                        markerSet, request.loadedImage, annotatedIndex++, parsed.crops);
             }
 
             String status = "Reconstructed " + reconstructed.bands.size()
@@ -3787,6 +3791,8 @@ public class Gelato implements Command {
             if (annotated == null || annotated.imagePlus == null) {
                 return;
             }
+            double overlayScale = sourceOverlayScale(annotated.imagePlus.getWidth());
+            double markerRadius = SOURCE_MARKER_R * overlayScale;
             Overlay overlay = new Overlay();
             LinkedHashMap<String, ReconstructionMarkerPreview> markers =
                     new LinkedHashMap<String, ReconstructionMarkerPreview>();
@@ -3813,7 +3819,7 @@ public class Gelato implements Command {
                     double tickY = geometry.y + cos * localY;
                     Line connector = new Line(markerX, markerY, tickX, tickY);
                     connector.setStrokeColor(cropColor);
-                    connector.setStrokeWidth(RECONSTRUCTION_CONNECTOR_STROKE_WIDTH);
+                    connector.setStrokeWidth(RECONSTRUCTION_CONNECTOR_STROKE_WIDTH * overlayScale);
                     overlay.add(connector);
 
                     String markerKey = crop.markerSetId + "|" + marker.label + "|"
@@ -3840,13 +3846,42 @@ public class Gelato implements Command {
                     label.setStrokeColor(Color.RED);
                     label.setFillColor(new Color(255, 255, 255, 170));
                     markerLabels.put(entry.getKey(), label);
-                    occupiedLabelBounds.add(paddedBounds(label.getBounds(), 4));
+                    occupiedLabelBounds.add(paddedBounds(label.getBounds(),
+                            Math.max(1, (int) Math.round(4 * overlayScale))));
                 }
             }
 
-            for (ReconstructionCropPreview preview : annotated.crops) {
+            addReconstructionCropOutlines(annotated.imagePlus, annotated.crops,
+                    overlay, occupiedLabelBounds);
+
+            for (Map.Entry<String, ReconstructionMarkerPreview> entry : markers.entrySet()) {
+                ReconstructionMarkerPreview marker = entry.getValue();
+                Line diagA = new Line(marker.x - markerRadius, marker.y - markerRadius,
+                        marker.x + markerRadius, marker.y + markerRadius);
+                diagA.setStrokeColor(Color.RED);
+                diagA.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH * overlayScale);
+                overlay.add(diagA);
+                Line diagB = new Line(marker.x - markerRadius, marker.y + markerRadius,
+                        marker.x + markerRadius, marker.y - markerRadius);
+                diagB.setStrokeColor(Color.RED);
+                diagB.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH * overlayScale);
+                overlay.add(diagB);
+                if (showSourceKdaLabels) {
+                    overlay.add(markerLabels.get(entry.getKey()));
+                }
+            }
+
+            annotated.imagePlus.setOverlay(overlay);
+            annotated.imagePlus.updateAndDraw();
+        }
+
+        private static void addReconstructionCropOutlines(ImagePlus image,
+                List<ReconstructionCropPreview> crops, Overlay overlay,
+                List<Rectangle> occupiedLabelBounds) {
+            double overlayScale = sourceOverlayScale(image.getWidth());
+            for (ReconstructionCropPreview preview : crops) {
                 ReconstructedGeometry geometry = scaleLoggedCropGeometry(
-                        preview.crop, annotated.imagePlus);
+                        preview.crop, image);
                 Point2D[] corners = reconstructedCropCorners(geometry);
                 Color cropColor = reconstructionCropColor(preview.bandNumber);
                 for (int corner = 0; corner < corners.length; corner++) {
@@ -3854,7 +3889,7 @@ public class Gelato implements Command {
                     Point2D end = corners[(corner + 1) % corners.length];
                     Line edge = new Line(start.x, start.y, end.x, end.y);
                     edge.setStrokeColor(cropColor);
-                    edge.setStrokeWidth(CROP_STROKE_WIDTH);
+                    edge.setStrokeWidth(CROP_STROKE_WIDTH * overlayScale);
                     overlay.add(edge);
                 }
 
@@ -3873,28 +3908,30 @@ public class Gelato implements Command {
                         + (cropName.length() == 0 ? "" : ": " + cropName);
                 TextRoi label = createReconstructionCropLabel(labelText, cropColor,
                         minimumX, minimumY, maximumX, maximumY,
-                        annotated.imagePlus.getWidth(), annotated.imagePlus.getHeight(),
+                        image.getWidth(), image.getHeight(),
                         occupiedLabelBounds);
                 overlay.add(label);
             }
 
-            for (Map.Entry<String, ReconstructionMarkerPreview> entry : markers.entrySet()) {
-                ReconstructionMarkerPreview marker = entry.getValue();
-                Line diagA = new Line(marker.x - SOURCE_MARKER_R, marker.y - SOURCE_MARKER_R,
-                        marker.x + SOURCE_MARKER_R, marker.y + SOURCE_MARKER_R);
-                diagA.setStrokeColor(Color.RED);
-                diagA.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH);
-                overlay.add(diagA);
-                Line diagB = new Line(marker.x - SOURCE_MARKER_R, marker.y + SOURCE_MARKER_R,
-                        marker.x + SOURCE_MARKER_R, marker.y - SOURCE_MARKER_R);
-                diagB.setStrokeColor(Color.RED);
-                diagB.setStrokeWidth(SOURCE_MARKER_STROKE_WIDTH);
-                overlay.add(diagB);
-                if (showSourceKdaLabels) {
-                    overlay.add(markerLabels.get(entry.getKey()));
+        }
+
+        private void drawAnnotatedMarkerOverlay(AnnotatedMarkerImage annotated) {
+            drawKdaOverlay(annotated.imagePlus, annotated.markerSet,
+                    annotated.scaleX, annotated.scaleY);
+            Overlay overlay = annotated.imagePlus.getOverlay();
+            if (overlay == null) {
+                overlay = new Overlay();
+            }
+            List<Rectangle> occupiedLabelBounds = new ArrayList<Rectangle>();
+            double overlayScale = sourceOverlayScale(annotated.imagePlus.getWidth());
+            for (Roi roi : overlay.toArray()) {
+                if (roi instanceof TextRoi) {
+                    occupiedLabelBounds.add(paddedBounds(roi.getBounds(),
+                            Math.max(1, (int) Math.round(4 * overlayScale))));
                 }
             }
-
+            addReconstructionCropOutlines(annotated.imagePlus, annotated.crops,
+                    overlay, occupiedLabelBounds);
             annotated.imagePlus.setOverlay(overlay);
             annotated.imagePlus.updateAndDraw();
         }
@@ -3902,52 +3939,56 @@ public class Gelato implements Command {
         private static TextRoi createReconstructionCropLabel(String text, Color color,
                 double minimumX, double minimumY, double maximumX, double maximumY,
                 int imageWidth, int imageHeight, List<Rectangle> occupiedBounds) {
-            double step = FONT_RECONSTRUCTION_CROP.getSize2D() + 8.0;
+            double overlayScale = sourceOverlayScale(imageWidth);
+            Font cropFont = sourceOverlayFont(FONT_RECONSTRUCTION_CROP, overlayScale);
+            double step = cropFont.getSize2D() + 8.0 * overlayScale;
             for (int distance = 0; distance <= 12; distance++) {
                 int[] directions = distance == 0 ? new int[] {0} : new int[] {-1, 1};
                 for (int direction : directions) {
                     TextRoi candidate = acceptableCropLabel(text,
-                            maximumX + 8.0, minimumY + direction * distance * step,
+                            maximumX + 8.0 * overlayScale, minimumY + direction * distance * step,
                             imageWidth, imageHeight, occupiedBounds);
                     if (candidate != null) {
-                        styleReconstructionCropLabel(candidate, color, occupiedBounds);
+                        styleReconstructionCropLabel(candidate, color, occupiedBounds, overlayScale);
                         return candidate;
                     }
                 }
             }
             for (int distance = 0; distance <= 12; distance++) {
-                TextRoi candidate = acceptableCropLabel(text, minimumX + 8.0,
-                        minimumY - FONT_RECONSTRUCTION_CROP.getSize2D() - 6.0
+                TextRoi candidate = acceptableCropLabel(text, minimumX + 8.0 * overlayScale,
+                        minimumY - cropFont.getSize2D() - 6.0 * overlayScale
                                 - distance * step,
                         imageWidth, imageHeight, occupiedBounds);
                 if (candidate != null) {
-                    styleReconstructionCropLabel(candidate, color, occupiedBounds);
+                    styleReconstructionCropLabel(candidate, color, occupiedBounds, overlayScale);
                     return candidate;
                 }
             }
             for (int distance = 0; distance <= 12; distance++) {
-                TextRoi candidate = acceptableCropLabel(text, minimumX + 8.0,
-                        maximumY + 6.0 + distance * step,
+                TextRoi candidate = acceptableCropLabel(text, minimumX + 8.0 * overlayScale,
+                        maximumY + 6.0 * overlayScale + distance * step,
                         imageWidth, imageHeight, occupiedBounds);
                 if (candidate != null) {
-                    styleReconstructionCropLabel(candidate, color, occupiedBounds);
+                    styleReconstructionCropLabel(candidate, color, occupiedBounds, overlayScale);
                     return candidate;
                 }
             }
 
             TextRoi fallback = new TextRoi(
-                    Math.max(0.0, Math.min(minimumX + 8.0, imageWidth - 1.0)),
+                    Math.max(0.0, Math.min(minimumX + 8.0 * overlayScale, imageWidth - 1.0)),
                     Math.max(0.0, Math.min(minimumY, imageHeight - 1.0)),
-                    text, FONT_RECONSTRUCTION_CROP);
-            styleReconstructionCropLabel(fallback, color, occupiedBounds);
+                    text, cropFont);
+            styleReconstructionCropLabel(fallback, color, occupiedBounds, overlayScale);
             return fallback;
         }
 
         private static TextRoi createReconstructionMarkerLabel(
                 ReconstructionMarkerPreview marker, int imageWidth, int imageHeight) {
-            final double gap = 14.0;
+            double overlayScale = sourceOverlayScale(imageWidth);
+            Font markerFont = sourceOverlayFont(FONT_RECONSTRUCTION_MARKER, overlayScale);
+            final double gap = 14.0 * overlayScale;
             TextRoi sizeProbe = new TextRoi(0.0, 0.0,
-                    marker.label, FONT_RECONSTRUCTION_MARKER);
+                    marker.label, markerFont);
             Rectangle probeBounds = sizeProbe.getBounds();
             double leftX = marker.x - gap - probeBounds.width;
             double rightX = marker.x + gap;
@@ -3961,10 +4002,10 @@ public class Gelato implements Command {
                 labelX = Math.max(0.0,
                         Math.min(labelX, Math.max(0.0, imageWidth - probeBounds.width)));
             }
-            double labelY = Math.max(0.0, Math.min(marker.y - 36.0,
+            double labelY = Math.max(0.0, Math.min(marker.y - 36.0 * overlayScale,
                     Math.max(0.0, imageHeight - probeBounds.height)));
             return new TextRoi(labelX, labelY,
-                    marker.label, FONT_RECONSTRUCTION_MARKER);
+                    marker.label, markerFont);
         }
 
         private static boolean fitsHorizontally(double x, int width, int imageWidth) {
@@ -3976,14 +4017,16 @@ public class Gelato implements Command {
             if (x < 0.0 || y < 0.0) {
                 return null;
             }
-            TextRoi candidate = new TextRoi(x, y, text, FONT_RECONSTRUCTION_CROP);
+            double overlayScale = sourceOverlayScale(imageWidth);
+            TextRoi candidate = new TextRoi(x, y, text,
+                    sourceOverlayFont(FONT_RECONSTRUCTION_CROP, overlayScale));
             Rectangle bounds = candidate.getBounds();
             if (bounds.x < 0 || bounds.y < 0
                     || bounds.x + bounds.width > imageWidth
                     || bounds.y + bounds.height > imageHeight) {
                 return null;
             }
-            Rectangle padded = paddedBounds(bounds, 4);
+            Rectangle padded = paddedBounds(bounds, Math.max(1, (int) Math.round(4 * overlayScale)));
             for (Rectangle occupied : occupiedBounds) {
                 if (padded.intersects(occupied)) {
                     return null;
@@ -3993,10 +4036,11 @@ public class Gelato implements Command {
         }
 
         private static void styleReconstructionCropLabel(TextRoi label, Color color,
-                List<Rectangle> occupiedBounds) {
+                List<Rectangle> occupiedBounds, double overlayScale) {
             label.setStrokeColor(color);
             label.setFillColor(new Color(255, 255, 255, 190));
-            occupiedBounds.add(paddedBounds(label.getBounds(), 4));
+            occupiedBounds.add(paddedBounds(label.getBounds(),
+                    Math.max(1, (int) Math.round(4 * overlayScale))));
         }
 
         private static Rectangle paddedBounds(Rectangle bounds, int padding) {
@@ -4024,6 +4068,14 @@ public class Gelato implements Command {
                     topRight.x + bottomLeft.x - topLeft.x,
                     topRight.y + bottomLeft.y - topLeft.y);
             return new Point2D[] {topLeft, topRight, bottomRight, bottomLeft};
+        }
+
+        private static double sourceOverlayScale(int imageWidth) {
+            return imageWidth / SOURCE_OVERLAY_REFERENCE_WIDTH;
+        }
+
+        private static Font sourceOverlayFont(Font base, double scale) {
+            return base.deriveFont((float) Math.max(1.0, base.getSize2D() * scale));
         }
 
         private static void placeAnnotatedSourceWindow(ImagePlus image, int index) {
@@ -4196,7 +4248,7 @@ public class Gelato implements Command {
         }
 
         private void openAnnotatedMarkerImage(KdaMarkerSet markerSet,
-                LoadedImage loadedImage, int index) {
+                LoadedImage loadedImage, int index, List<LoggedCrop> loggedCrops) {
             if (markerSet == null || loadedImage == null) {
                 return;
             }
@@ -4206,11 +4258,11 @@ public class Gelato implements Command {
             double scaleX = annotatedImage.getWidth() / (double) markerSet.sourceWidth;
             double scaleY = annotatedImage.getHeight() / (double) markerSet.sourceHeight;
             AnnotatedMarkerImage annotated = new AnnotatedMarkerImage(
-                    annotatedImage, markerSet, scaleX, scaleY);
+                    annotatedImage, markerSet, scaleX, scaleY, loggedCrops);
             annotatedMarkerImages.add(annotated);
             annotatedImage.show();
             placeAnnotatedSourceWindow(annotatedImage, index);
-            drawKdaOverlay(annotatedImage, markerSet, scaleX, scaleY);
+            drawAnnotatedMarkerOverlay(annotated);
             installAnnotatedExportMenu(annotatedImage);
         }
 
@@ -6761,12 +6813,21 @@ public class Gelato implements Command {
         final double scaleX;
         final double scaleY;
 
+        final List<ReconstructionCropPreview> crops =
+                new ArrayList<ReconstructionCropPreview>();
+
         AnnotatedMarkerImage(ImagePlus imagePlus, KdaMarkerSet markerSet,
-                double scaleX, double scaleY) {
+                double scaleX, double scaleY, List<LoggedCrop> loggedCrops) {
             this.imagePlus = imagePlus;
             this.markerSet = markerSet;
             this.scaleX = scaleX;
             this.scaleY = scaleY;
+            for (int i = 0; i < loggedCrops.size(); i++) {
+                LoggedCrop crop = loggedCrops.get(i);
+                if (markerSet.id.equals(crop.markerSetId)) {
+                    crops.add(new ReconstructionCropPreview(crop, i + 1));
+                }
+            }
         }
     }
 

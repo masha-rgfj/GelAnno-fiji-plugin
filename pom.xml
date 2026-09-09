@@ -11,16 +11,16 @@
     <relativePath />
   </parent>
 
-  <groupId>gelanno</groupId>
-  <artifactId>gelanno</artifactId>
-  <version>0.8.6</version>
+  <groupId>gelato</groupId>
+  <artifactId>gelato</artifactId>
+  <version>1.0.1</version>
   <packaging>jar</packaging>
 
-  <name>GelAnno</name>
-  <description>Gel figure annotation plugin for ImageJ1 and Fiji/ImageJ2.</description>
+  <name>Gelato</name>
+  <description>ImageJ1 and Fiji/ImageJ2 plugin for traceable western blot figures</description>
   
     <!-- Project information -->
-  <url>https://github.com/masha-rgfj/GelAnno-fiji-plugin</url>
+  <url>https://github.com/masha-rgfj/Gelato-fiji-plugin</url>
   <inceptionYear>2026</inceptionYear>
 
   <organization>
@@ -67,18 +67,18 @@
   <!-- Source-code repository information. -->
   <scm>
     <connection>
-      scm:git:https://github.com/masha-rgfj/GelAnno-fiji-plugin.git
+      scm:git:https://github.com/masha-rgfj/Gelato-fiji-plugin.git
     </connection>
     <developerConnection>
-      scm:git:https://github.com/masha-rgfj/GelAnno-fiji-plugin.git
+      scm:git:https://github.com/masha-rgfj/Gelato-fiji-plugin.git
     </developerConnection>
     <tag>HEAD</tag>
-    <url>https://github.com/masha-rgfj/GelAnno-fiji-plugin</url>
+    <url>https://github.com/masha-rgfj/Gelato-fiji-plugin</url>
   </scm>
 
   <issueManagement>
     <system>GitHub Issues</system>
-    <url>https://github.com/masha-rgfj/GelAnno-fiji-plugin/issues</url>
+    <url>https://github.com/masha-rgfj/Gelato-fiji-plugin/issues</url>
   </issueManagement>
 
   <ciManagement>
@@ -104,7 +104,7 @@
       <artifactId>scijava-common</artifactId>
     </dependency>
 
-    <!-- Required by GelAnno PDF export. -->
+    <!-- Required by Gelato PDF export. -->
     <dependency>
       <groupId>com.itextpdf</groupId>
       <artifactId>itextpdf</artifactId>
