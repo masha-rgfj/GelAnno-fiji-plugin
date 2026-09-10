@@ -110,7 +110,7 @@ import org.scijava.plugin.Plugin;
 
 @Plugin(
         type = Command.class,
-        menuPath = "Plugins>Gelato>Gelato 1.0.1")
+        menuPath = "Plugins>Gelato>Gelato 1.0.2")
 public class Gelato implements Command {
     @Override
     public void run() {
@@ -133,7 +133,7 @@ public class Gelato implements Command {
         private static final float A4_PAGE_HEIGHT_PT = 841.8898f;
         private static final int TOOL_BUTTON_W = 220;
         private static final int TOOL_BUTTON_H = 30;
-        private static final String VERSION = "1.0.1";
+        private static final String VERSION = "1.0.2";
         private static final int LOG_FORMAT_VERSION = 1;
         private static final double CROP_GEOMETRY_AGREEMENT_TOLERANCE = 1.0;
         private static final double MARKER_COORDINATE_AGREEMENT_TOLERANCE = 1.0;
@@ -3815,8 +3815,13 @@ public class Gelato implements Command {
                     double markerX = marker.gelXAbs.doubleValue() * markerScaleX;
                     double markerY = marker.gelYAbs.doubleValue() * markerScaleY;
                     double localY = marker.yInCrop.doubleValue() * localScaleY;
-                    double tickX = geometry.x - sin * localY;
-                    double tickY = geometry.y + cos * localY;
+                    // Choose the nearer side in crop coordinates, including for rotated crops.
+                    // The midpoint belongs to the left edge; preserve the mapped tick height.
+                    double localX = cos * (markerX - geometry.x)
+                            + sin * (markerY - geometry.y);
+                    double edgeX = localX > geometry.width / 2.0 ? geometry.width : 0.0;
+                    double tickX = geometry.x + cos * edgeX - sin * localY;
+                    double tickY = geometry.y + sin * edgeX + cos * localY;
                     Line connector = new Line(markerX, markerY, tickX, tickY);
                     connector.setStrokeColor(cropColor);
                     connector.setStrokeWidth(RECONSTRUCTION_CONNECTOR_STROKE_WIDTH * overlayScale);
